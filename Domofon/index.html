@@ -173,7 +173,9 @@ document.addEventListener('click', function(e){
 
   if(!t || t.getAttribute('data-type') !== 'a')
     return;
-  play(value, 125)
+  //play(value, 125);
+  var track = new Audio('1864.66.mp3');
+  track.play();
   i++;
   buttonClicks++;
 
