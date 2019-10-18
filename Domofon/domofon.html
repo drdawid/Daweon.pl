@@ -1,0 +1,603 @@
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+<meta charset="utf-8">
+<style>
+
+@font-face {
+  font-family: Futura;
+  src: local("Futura"),
+       url(Futura.otf);
+  font-weight: normal;
+}
+
+*
+{
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0);
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+}
+
+#container {
+  margin-left: 9px;
+    margin-top: -28px;
+}
+
+#keyboard {
+  z-index: 1000;
+  width: 300px;
+  position: absolute;
+  top: 123px;
+  left: 16px;
+}
+
+button {
+    width: 85px;
+    height: 85px;
+    border-radius: 15px;
+    border: 2px solid #fff;
+    background: transparent;
+    color: #fff;
+    font-size: 54px;
+    margin-bottom: 15px;
+    margin-left: 11px;
+    cursor: pointer;
+    outline: 0;
+    font-family: Futura;
+    font-weight: 900;
+    overflow: hidden;
+}
+
+button:nth-child(13){
+    font-size: 43px;
+    transform: rotate(90deg);
+    color: #fff;
+  }
+
+</style>
+
+<div id="container"></div>
+
+<div id="keyboard">
+  <button data-type="a" data-value="1864.66">1</button>
+  <button data-type="a" data-value="1975.53">2</button>
+  <button data-type="a" data-value="2093.00">3</button>
+  <button data-type="a" data-value="2217.46">4</button>
+  <button data-type="a" data-value="2349.32">5</button>
+  <button data-type="a" data-value="2489.02">6</button>
+  <button data-type="a" data-value="2637.02">7</button>
+  <button data-type="a" data-value="2793.83">8</button>
+  <button data-type="a" data-value="2959.96">9</button>
+  <button data-type="a" data-value="3322.44">key</button>
+  <button data-type="a" data-value="1760.00">0</button>
+  <button data-type="a" data-value="3135.96">C</button>
+</div>
+
+
+<script src="jquery-1.12.0.min.js"></script>
+<script src="kinetic-v4.7.4.min.js"></script>
+
+<script>
+/*
+
+Stany:
+
+0 - tryb czuwania         gdy nie jest uruchomiony inny stan
+1 - wprowadzanie liczby   uruchamiany 0-9; C, klucz gdy zły numer lokalu lub po 10 sek. bezczynności - powrót do trybu czuwania
+2 - wprowadzanie pinu     uruchaminy kluczem, jeśli wprowadzony poprawny numer lokalu, po 10 sek. bezczynności powrót do trybu czuwania
+3 - błąd                  wprowadzenie złego pinu, 3 sekundy, anulowanie C lub klucz - następuje powrót do trybu czuwania, dowolna liczba - stan wprowadzania liczby
+4 - open                  wprowadzenie poprawnego pinu, w konsekwencji 6 sekund dźwięk 1800 Hz i napis O-n bez możliwości anulowania ani wpisywania czegokolwiek, po 6 sek. powrót do stanu czuwania
+5 - oczek. połączenia     natychmiast po wybraniu poprawnego numeru lokalu przez 3 sekundy, anulowany C, klucz lub inna liczba
+6 - dzwonienie            po 3 sekundach od wprowadzenia poprawnego numeru lokalu, do rozłączenia C, anulowania przez lokatora lub upłynięcia limitu 30 sek.
+7 - rozmowa               od odebrania przez lokatora do rozłączenia C lub odłożenia słuchawki, max. 120 s 
+8 - menu instalatora      od wejścia do wyjścia lub bezczynności 60 sek.
+
+*/
+
+'use strict';
+
+var
+
+firstA,
+secondA,
+thirdA,
+fourthA,
+premissesNumber,
+
+openTime = 5000,
+
+memoryDisplay = '',
+buttonClicks = 0,
+keyClicks = 0,
+state = 0,
+keyMode = false,
+i = 0;
+
+var settings = [];
+
+settings['openTime'] = 6000;
+
+function launchFullScreen(element) {
+  if(element.requestFullScreen) {
+    element.requestFullScreen();
+  } else if(element.mozRequestFullScreen) {
+    element.mozRequestFullScreen();
+  } else if(element.webkitRequestFullScreen) {
+    element.webkitRequestFullScreen();
+  }
+}
+
+
+function setIntervalX(callback, delay, repetitions) {
+    var x = 0;
+    var intervalID = window.setInterval(function () {
+
+       callback();
+
+       if (++x === repetitions) {
+           window.clearInterval(intervalID);
+       }
+    }, delay);
+}
+
+
+function play(value, time)
+{
+  var context = new AudioContext();
+  var osc = context.createOscillator();
+
+ // osc.type = "square";
+  osc.connect(context.destination);
+  osc.frequency.value = value;
+
+  osc.start();
+
+  setTimeout(function() {
+    context.close();
+    context.audioContext = null;
+  }, time);
+
+}
+
+document.addEventListener('click', function(e){
+  //launchFullScreen(document.body);
+  var t = e.target
+  ,value = t.getAttribute('data-value')
+  ,buttonValue = t.innerHTML;
+
+  if(!t || t.getAttribute('data-type') !== 'a')
+    return;
+  play(value, 75)
+  i++;
+  buttonClicks++;
+
+
+
+
+  if(buttonValue == 'C')
+  {
+    i = 0;
+    memoryDisplay = '';
+    setDigits(11, 11, 11, 11);
+    keyMode = false;
+  }
+  else if(buttonValue == 'key')
+  {
+    keyClicks++;
+    if(memoryDisplay == 1 || memoryDisplay == 2 || memoryDisplay == 3 || memoryDisplay == 4 || memoryDisplay == 5 || memoryDisplay == 6) {
+
+
+
+            keyMode = true;
+            setDigits(10, 10, 10, 10);
+            i=0;
+            premissesNumber = memoryDisplay;
+            memoryDisplay = '';
+
+
+          } else if(keyClicks == 5) {
+
+             setIntervalX(function () {
+             play(2349.32, 75);
+            }, 100, 3);
+
+
+
+
+            keyMode = true;
+            setDigits(10, 10, 10, 10);
+            i=0;
+            premissesNumber = memoryDisplay;
+            memoryDisplay = '';
+
+        } else {
+           i = 0;
+          memoryDisplay = '';
+          setDigits(11, 11, 11, 11);
+          keyMode = false;
+        }
+  }
+  else {
+    memoryDisplay += buttonValue;
+  }
+    
+
+
+
+  if(i == 1)
+  {
+    firstA = buttonValue;
+
+    if(keyMode == true) {setDigits(10, 10, 10, 13);} else {setDigits(firstA, 11, 11, 11);}
+    
+  } else if(i == 2) {
+    secondA = buttonValue;
+      if(keyMode == true) {setDigits(10, 10, 13, 13);} else {setDigits(secondA, firstA, 11, 11);}
+    
+  } else if(i == 3) {
+    thirdA = buttonValue;
+      if(keyMode == true) {setDigits(10, 13, 13, 13);} else { setDigits(thirdA, secondA, firstA, 11);}
+   
+  }
+  else if(i == 4)
+  {
+
+
+window.requestAnimFrame = (function(){
+  return  window.requestAnimationFrame       ||
+          window.webkitRequestAnimationFrame ||
+          window.mozRequestAnimationFrame    ||
+          window.oRequestAnimationFrame      ||
+          window.msRequestAnimationFrame     ||
+          function(/* function */ callback, /* DOMElement */ element){
+            window.setTimeout(callback, 1000 / 60);
+          };
+})();
+
+    if(keyMode == true) {
+
+      i = 0;
+      setDigits(13, 13, 13, 13);
+      keyMode = false;
+
+        if((premissesNumber == '1' && memoryDisplay == '3356') || (premissesNumber == '2' && memoryDisplay == '1602') || (premissesNumber == '3' && memoryDisplay == '1222'))  {
+
+
+
+ setTimeout(function() { 
+  setIntervalX(function () {
+     play(2349.32, 75);
+    }, 100, 3);
+
+}, 300);
+
+setTimeout(function() {
+
+
+  play(1800, openTime);
+  setDigits(37, 10, 0, 11);
+
+
+          setTimeout(function() {
+            setDigits(11, 11, 11, 11);
+            play(1900, 75);
+            setTimeout(function(){play(2300, 75)},80);
+            setTimeout(function(){play(2700, 75)},160);
+          }, openTime);
+
+          
+}, 1000);
+
+         
+        } else {
+
+          setDigits(30,30,14,11);
+             play(200, 200);
+        setTimeout(function() {
+          play(200, 200);
+        }, 215);
+        setTimeout(function() {
+          play(200, 200);
+        }, 465);
+    }
+
+
+
+    memoryDisplay = '';
+
+    } else {
+       fourthA = buttonValue;
+         if(keyMode == true) {fourthA = 10;}
+       setDigits(fourthA, thirdA, secondA, firstA);
+     }
+  } else if(i == 5)
+  {
+    memoryDisplay = buttonValue;
+    firstA = buttonValue;
+    setDigits(firstA, 11, 11, 11);
+    i = 1;
+  }
+
+
+
+
+  if(memoryDisplay == '1' || memoryDisplay == '2' || memoryDisplay == '3' || memoryDisplay == '4' || memoryDisplay == '5' || memoryDisplay == '6') {
+    var a = memoryDisplay,
+    b = buttonClicks;
+    setTimeout(function() {
+      if(memoryDisplay == a && b == buttonClicks && keyMode == false) {
+         
+
+var track = new Audio('call.mp3');
+ track.play();
+
+        setDigits(19, 19, 12, 13);
+
+      }
+    }, 3000)
+  }
+
+
+
+});
+
+
+
+
+
+    /************* #1 *************/
+
+    var stage = new Kinetic.Stage({
+        container: 'container',
+        width: $(document).width(),
+        height: $(document).height()
+    });
+
+    var staticClockLayer = new Kinetic.Layer();
+    var hoursLayer = new Kinetic.Layer(); 
+    var minutesLayer = new Kinetic.Layer();
+    var secAndMsecLayer = new Kinetic.Layer();
+
+    /************* #2 *************/
+
+    var setup = {
+        refreshTime:    0, //not more than max 1000, if 0 then use 
+        startX:         10,
+        startY:         10,
+        ledWidth:       30,
+        ledThickness:   8,
+        ledX:           30,
+        ledY:           30,
+        digitSpace:     20,
+        secondsSpace:   20,
+        ledSecRadius:   20,
+        ledDisabled:    '#0E0E0E',
+        ledEndabled:    '#840000',
+        clock:          '#000000'
+    }
+
+    /************* #3 *************/
+
+    var clock_bg = new Kinetic.Rect({
+        x: setup.startX,
+        y: setup.startY,
+        width: setup.ledX*2+setup.ledWidth*9+setup.ledThickness*17+setup.digitSpace*5+setup.secondsSpace*3,
+        height: setup.ledY*2+setup.ledWidth*2+setup.ledThickness*2,
+        fill: setup.clock
+    });
+
+    /************* #4 *************/
+
+    function drawLed(peakX, peakY, rotDeg){
+        if ( rotDeg == undefined ) rotDeg = 0;
+        var peakXabsolute = peakX + setup.startX;
+        var peakYabsolute = peakY + setup.startX;
+        return new Kinetic.Polygon({
+            x: peakXabsolute,
+            y: peakYabsolute,
+            points : [
+                0,                                      0,
+                setup.ledThickness/2,                   -setup.ledThickness/2,
+                setup.ledWidth+setup.ledThickness/2,    -setup.ledThickness/2,
+                setup.ledWidth+setup.ledThickness,      0,
+                setup.ledWidth+setup.ledThickness/2,    +setup.ledThickness/2,
+                setup.ledThickness/2,                   +setup.ledThickness/2
+            ],
+            fill: setup.ledDisabled,
+            rotationDeg: rotDeg,
+            strokeWidth: 0
+        });
+    }
+
+    /************* #5 *************/
+
+    function drawDigit(startX, startY){
+
+        return {
+            top : drawLed(startX, startY),
+            middle : drawLed(startX, startY+setup.ledWidth+setup.ledThickness),
+            bottom : drawLed(startX, startY+(setup.ledWidth+setup.ledThickness)*2),
+            top_left : drawLed(startX, startY, 90),
+            bottom_left : drawLed(startX, startY+setup.ledWidth+setup.ledThickness, 90),
+            top_right : drawLed(startX+setup.ledWidth+setup.ledThickness, startY, 90),
+            bottom_right : drawLed(startX+setup.ledWidth+setup.ledThickness, startY+setup.ledWidth+setup.ledThickness, 90)
+        }
+    }
+
+    /************* #6 *************/
+
+    var led_h1 = drawDigit(setup.ledX,setup.ledY);
+    var led_h2 = drawDigit(setup.ledX+setup.ledWidth+setup.ledThickness*2+setup.digitSpace,setup.ledY);
+
+    var led_sd1 = new Kinetic.Circle({
+        x: setup.startX+(setup.ledWidth+setup.ledThickness*2)*2+setup.digitSpace+setup.secondsSpace/2+setup.ledX-setup.ledThickness/2,
+        y: setup.startY+setup.ledY+setup.ledWidth/2+setup.ledThickness,
+        fill: setup.ledEndabled,
+        radius: setup.ledSecRadius
+    });
+
+    var led_sd2 = new Kinetic.Circle({
+        x: setup.startX+(setup.ledWidth+setup.ledThickness*2)*2+setup.digitSpace+setup.secondsSpace/2+setup.ledX-setup.ledThickness/2,
+        y: setup.startY+setup.ledY+setup.ledWidth*1.5+setup.ledThickness,
+        fill: setup.ledEndabled,
+        radius: setup.ledSecRadius
+    });
+
+    var led_m1 = drawDigit(setup.ledX+(setup.ledWidth+setup.ledThickness*2)*2+setup.digitSpace+setup.secondsSpace,setup.ledY);
+    var led_m2 = drawDigit(setup.ledX+(setup.ledWidth+setup.ledThickness*2)*3+setup.digitSpace*2+setup.secondsSpace,setup.ledY);
+
+    var led_sd3 = new Kinetic.Circle({
+        x: setup.startX+(setup.ledWidth+setup.ledThickness*2)*4+setup.digitSpace*4+setup.secondsSpace+setup.ledX-setup.ledThickness/2,
+        y: setup.startY+setup.ledY+setup.ledWidth/2+setup.ledThickness,
+        fill: setup.ledEndabled,
+        radius: setup.ledSecRadius
+    });
+
+    var led_sd4 = new Kinetic.Circle({
+        x: setup.startX+(setup.ledWidth+setup.ledThickness*2)*4+setup.digitSpace*4+setup.secondsSpace+setup.ledX-setup.ledThickness/2,
+        y: setup.startY+setup.ledY+setup.ledWidth*1.5+setup.ledThickness,
+        fill: setup.ledEndabled,
+        radius: setup.ledSecRadius
+    });
+
+    var led_s1 = drawDigit(setup.ledX+(setup.ledWidth+setup.ledThickness*2)*4+setup.digitSpace*2+setup.secondsSpace*2,setup.ledY);
+    var led_s2  = drawDigit(setup.ledX+(setup.ledWidth+setup.ledThickness*2)*5+setup.digitSpace*3+setup.secondsSpace*2,setup.ledY);
+
+    var led_sd5 = new Kinetic.Circle({
+        x: 290,
+        y: 116,
+        fill: setup.ledEndabled,
+        radius: 3
+    });
+
+
+    var led_ms1 = drawDigit(setup.ledX+(setup.ledWidth+setup.ledThickness*2)*6+setup.digitSpace*3+setup.secondsSpace*3,setup.ledY);
+    var led_ms2 = drawDigit(setup.ledX+(setup.ledWidth+setup.ledThickness*2)*7+setup.digitSpace*4+setup.secondsSpace*3,setup.ledY);
+    var led_ms3 = drawDigit(setup.ledX+(setup.ledWidth+setup.ledThickness*2)*8+setup.digitSpace*5+setup.secondsSpace*3,setup.ledY);
+
+    /************* #7 *************/
+
+    staticClockLayer
+    .add(clock_bg)
+    .add(led_sd5)
+    ;
+
+    hoursLayer
+    .add(led_h1.top)
+    .add(led_h1.middle)
+    .add(led_h1.bottom)
+    .add(led_h1.top_left)
+    .add(led_h1.bottom_left)
+    .add(led_h1.top_right)
+    .add(led_h1.bottom_right)
+    .add(led_h2.top)
+    .add(led_h2.middle)
+    .add(led_h2.bottom)
+    .add(led_h2.top_left)
+    .add(led_h2.bottom_left)
+    .add(led_h2.top_right)
+    .add(led_h2.bottom_right)
+    ;
+
+    minutesLayer
+    .add(led_m1.top)
+    .add(led_m1.middle)
+    .add(led_m1.bottom)
+    .add(led_m1.top_left)
+    .add(led_m1.bottom_left)
+    .add(led_m1.top_right)
+    .add(led_m1.bottom_right)
+    .add(led_m2.top)
+    .add(led_m2.middle)
+    .add(led_m2.bottom)
+    .add(led_m2.top_left)
+    .add(led_m2.bottom_left)
+    .add(led_m2.top_right)
+    .add(led_m2.bottom_right)
+    ;
+
+    stage
+    .add(staticClockLayer)
+    .add(hoursLayer)
+    .add(minutesLayer)
+
+    /************* #8 *************/
+
+    function setDigit(digit, value){
+        var digitSettings = [
+            {'top' : true, 'middle' : false, 'bottom' : true, 'top_right' : true, 'bottom_right' : true, 'bottom_left' : true, 'top_left' : true},          //0
+            {'top' : false, 'middle' : false, 'bottom' : false, 'top_right' : true, 'bottom_right' : true, 'bottom_left' : false, 'top_left' : false},      //1
+            {'top' : true, 'middle' : true, 'bottom' : true, 'top_right' : true, 'bottom_right' : false, 'bottom_left' : true, 'top_left' : false},         //2
+            {'top' : true, 'middle' : true, 'bottom' : true, 'top_right' : true, 'bottom_right' : true, 'bottom_left' : false, 'top_left' : false},         //3
+            {'top' : false, 'middle' : true, 'bottom' : false, 'top_right' : true, 'bottom_right' : true, 'bottom_left' : false, 'top_left' : true},        //4
+            {'top' : true, 'middle' : true, 'bottom' : true, 'top_right' : false, 'bottom_right' : true, 'bottom_left' : false, 'top_left' : true},         //5
+            {'top' : true, 'middle' : true, 'bottom' : true, 'top_right' : false, 'bottom_right' : true, 'bottom_left' : true, 'top_left' : true},          //6
+            {'top' : true, 'middle' : false, 'bottom' : false, 'top_right' : true, 'bottom_right' : true, 'bottom_left' : false, 'top_left' : false},       //7
+            {'top' : true, 'middle' : true, 'bottom' : true, 'top_right' : true, 'bottom_right' : true, 'bottom_left' : true, 'top_left' : true},           //8
+            {'top' : true, 'middle' : true, 'bottom' : true, 'top_right' : true, 'bottom_right' : true, 'bottom_left' : false, 'top_left' : true},          //9
+            {'top' : false, 'middle' : true, 'bottom' : false, 'top_right' : false, 'bottom_right' : false, 'bottom_left' : false, 'top_left' : false},          //-    10
+            {'top' : false, 'middle' : false, 'bottom' : false, 'top_right' : false, 'bottom_right' : false, 'bottom_left' : false, 'top_left' : false},       // puste  11
+            {'top': true, 'middle': true, 'bottom': false, 'top_right': true, 'bottom_right': true, 'bottom_left': true, 'top_left': true},    //A              12       
+            {'top': true, 'middle': false, 'bottom': true, 'top_right': false, 'bottom_right': false, 'bottom_left': true, 'top_left': true},    //C          13
+            {'top': true, 'middle': true, 'bottom': true, 'top_right': false, 'bottom_right': false, 'bottom_left': true, 'top_left': true},    //E          14
+            {'top': true, 'middle': true, 'bottom': false, 'top_right': false, 'bottom_right': false, 'bottom_left': true, 'top_left': true},    //F          15
+            {'top': true, 'middle': false, 'bottom': true, 'top_right': false, 'bottom_right': true, 'bottom_left': true, 'top_left': true},    //G          16
+            {'top': false, 'middle': true, 'bottom': false, 'top_right': true, 'bottom_right': true, 'bottom_left': true, 'top_left': true},    //H          17
+            {'top': false, 'middle': false, 'bottom': true, 'top_right': true, 'bottom_right': true, 'bottom_left': false, 'top_left': false},    //J          18
+            {'top': false, 'middle': false, 'bottom': true, 'top_right': false, 'bottom_right': false, 'bottom_left': true, 'top_left': true},    //L          19
+            {'top': true, 'middle': true, 'bottom': false, 'top_right': true, 'bottom_right': false, 'bottom_left': true, 'top_left': true},    //P          20
+            {'top': true, 'middle': true, 'bottom': true, 'top_right': false, 'bottom_right': true, 'bottom_left': false, 'top_left': true},    //S          21
+            {'top': false, 'middle': false, 'bottom': true, 'top_right': true, 'bottom_right': true, 'bottom_left': true, 'top_left': true},    //U          22
+            {'top': false, 'middle': true, 'bottom': true, 'top_right': false, 'bottom_right': true, 'bottom_left': true, 'top_left': true},    //b          23
+            {'top': false, 'middle': true, 'bottom': true, 'top_right': false, 'bottom_right': false, 'bottom_left': true, 'top_left': false},    //c          24
+            {'top': false, 'middle': true, 'bottom': true, 'top_right': true, 'bottom_right': true, 'bottom_left': true, 'top_left': false},    //d          25
+            {'top': false, 'middle': true, 'bottom': false, 'top_right': false, 'bottom_right': true, 'bottom_left': true, 'top_left': true},    //h          26
+            {'top': false, 'middle': false, 'bottom': false, 'top_right': false, 'bottom_right': true, 'bottom_left': false, 'top_left': false},    //i          27
+            {'top': false, 'middle': true, 'bottom': true, 'top_right': false, 'bottom_right': true, 'bottom_left': true, 'top_left': false},    //o          28
+            {'top': true, 'middle': true, 'bottom': false, 'top_right': true, 'bottom_right': true, 'bottom_left': false, 'top_left': true},    //q          29
+            {'top': false, 'middle': true, 'bottom': false, 'top_right': false, 'bottom_right': false, 'bottom_left': true, 'top_left': false},    //r          30
+            {'top': false, 'middle': true, 'bottom': true, 'top_right': false, 'bottom_right': false, 'bottom_left': true, 'top_left': true},    //t          31
+            {'top': false, 'middle': false, 'bottom': true, 'top_right': false, 'bottom_right': true, 'bottom_left': true, 'top_left': false},    //          32
+            {'top': false, 'middle': false, 'bottom': true, 'top_right': false, 'bottom_right': true, 'bottom_left': true, 'top_left': false},    //u          33
+            {'top': false, 'middle': true, 'bottom': true, 'top_right': true, 'bottom_right': true, 'bottom_left': false, 'top_left': true},    //y          34
+            {'top': true, 'middle': true, 'bottom': false, 'top_right': true, 'bottom_right': false, 'bottom_left': false, 'top_left': true},    //o u góry          35
+            {'top': false, 'middle': false, 'bottom': true, 'top_right': false, 'bottom_right': false, 'bottom_left': false, 'top_left': false},    //_          36
+            {'top': false, 'middle': true, 'bottom': false, 'top_right': false, 'bottom_right': true, 'bottom_left': true, 'top_left': false},    //n       37
+        ]
+
+        if ( digitSettings[value].top == true ) digit.top.setFill(setup.ledEndabled)
+            else digit.top.setFill(setup.ledDisabled);
+        if ( digitSettings[value].middle == true ) digit.middle.setFill(setup.ledEndabled);
+            else digit.middle.setFill(setup.ledDisabled);
+        if ( digitSettings[value].bottom == true ) digit.bottom.setFill(setup.ledEndabled);
+            else digit.bottom.setFill(setup.ledDisabled);
+        if ( digitSettings[value].top_right == true ) digit.top_right.setFill(setup.ledEndabled);
+            else digit.top_right.setFill(setup.ledDisabled);
+        if ( digitSettings[value].bottom_right == true ) digit.bottom_right.setFill(setup.ledEndabled);
+            else digit.bottom_right.setFill(setup.ledDisabled);
+        if ( digitSettings[value].bottom_left == true ) digit.bottom_left.setFill(setup.ledEndabled);
+            else digit.bottom_left.setFill(setup.ledDisabled);
+        if ( digitSettings[value].top_left == true ) digit.top_left.setFill(setup.ledEndabled);
+            else digit.top_left.setFill(setup.ledDisabled);
+    }
+
+    /************* #9 *************/
+
+    function setDigits(first, second, third, fourth){
+
+        if(typeof fourth !== "undefined") {setDigit(led_h1,fourth);}
+        if(typeof third !== "undefined") {setDigit(led_h2,third);}
+        if(typeof second !== "undefined") {setDigit(led_m1,second);}
+        if(typeof first !== "undefined") {setDigit(led_m2,first);}
+         minutesLayer.draw();
+         hoursLayer.draw();
+    }
+
+
+</script>
