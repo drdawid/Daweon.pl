@@ -8,6 +8,21 @@
 		<div style="font-size:2em">
 			My website finally works! (Oh shit, unfortunately no.)
 			<p><i>Pozdrawiam, Daweon :)</i></p>
+			<button>play</button>
+			<audio></audio>
+			<script>
+			var xhr = new XMLHttpRequest();
+			xhr.open('GET', 'Domofon/1864.66.mp3', true);
+			xhr.responseType = 'blob';
+			var audio = document.querySelector('audio');
+			xhr.onload = function () {
+			    audio.src = URL.createObjectURL(xhr.response);  
+			};
+			xhr.send();
+			document.querySelector('button').onclick = function () {
+			    audio.play();
+			};
+			</script>
 		</div>
 	</body>
 </html>
